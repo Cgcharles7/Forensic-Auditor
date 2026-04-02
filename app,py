@@ -1,0 +1,38 @@
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from playwright.sync_api import sync_playwright
+import math
+import time
+
+app = FastAPI()
+
+# --- THE AUDIT LOGIC ---
+def run_audit(target_url):
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context()
+        page = context.new_page()
+        page.goto(target_url, wait_until="networkidle")
+        time.sleep(2) # Wait for late-dropping trackers
+        
+        cookies = context.cookies()
+        # ... (Insert the Entropy/Lifespan logic we wrote earlier) ...
+        browser.close()
+        return {"total": len(cookies), "cookies": cookies}
+
+# --- THE ROUTES ---
+
+# 1. This serves your HTML (Like an index.php)
+@app.get("/")
+async def serve_home():
+    return FileResponse('static/index.html')
+
+# 2. This is the API endpoint your JS calls
+@app.get("/api/audit")
+async def api_audit(url: str):
+    data = run_audit(url)
+    return data
+
+# Mount the static folder so JS/CSS files work
+app.mount("/", StaticFiles(directory="static"), name="static")
